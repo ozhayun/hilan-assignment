@@ -1,0 +1,34 @@
+<h2>Leave Requests</h2>
+
+<!-- TODO (candidate): add the "new request" form here, with validation. -->
+
+<div *ngIf="loading">Loading...</div>
+
+<table *ngIf="!loading">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Employee</th>
+      <th>Type</th>
+      <th>Start</th>
+      <th>End</th>
+      <th>Days</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let r of requests">
+      <td>{{ r.id }}</td>
+      <td>{{ r.employee?.name }}</td>
+      <td>{{ typeLabel(r.type) }}</td>
+      <td>{{ r.startDate | date: 'dd/MM/yyyy' }}</td>
+      <td>{{ r.endDate | date: 'dd/MM/yyyy' }}</td>
+      <td>{{ r.days }}</td>
+      <td>{{ statusLabel(r.status) }}</td>
+      <td>
+        <button *ngIf="r.status == 0" (click)="approve(r.id)">Approve</button>
+      </td>
+    </tr>
+  </tbody>
+</table>
