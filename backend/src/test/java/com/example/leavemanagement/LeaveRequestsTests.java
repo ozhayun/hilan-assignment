@@ -113,6 +113,40 @@ class LeaveRequestsTests {
     }
 
     @Test
+    void create_OverlappingExistingRequest_IsRejected() {
+        // Arrange: employee with an existing approved request 10-20 Mar.
+        Employee emp = new Employee();
+        emp.setName("Test Emp");
+        emp.setAnnualQuota(30);
+        employees.save(emp);
+
+        LeaveRequest existing = new LeaveRequest();
+        existing.setEmployeeId(emp.getId());
+        existing.setType(LeaveType.VACATION);
+        existing.setStatus(LeaveStatus.APPROVED);
+        existing.setStartDate(LocalDate.of(2026, 3, 10));
+        existing.setEndDate(LocalDate.of(2026, 3, 20));
+        existing.setDays(11);
+        leaveRequests.save(existing);
+
+        long before = leaveRequests.count();
+
+        // A new request 15-25 Mar overlaps the existing one on 15-20 Mar.
+        CreateLeaveRequestDto dto = new CreateLeaveRequestDto();
+        dto.setEmployeeId(emp.getId());
+        dto.setType(LeaveType.SICK);
+        dto.setStartDate(LocalDate.of(2026, 3, 15));
+        dto.setEndDate(LocalDate.of(2026, 3, 25));
+
+        // Act
+        ResponseEntity<?> result = controller.create(dto);
+
+        // Assert
+        assertEquals(409, result.getStatusCode().value());
+        assertEquals(before, leaveRequests.count());
+    }
+
+    @Test
     void approve_UnknownId_Returns404() {
         ResponseEntity<?> result = controller.approve(-1L);
 

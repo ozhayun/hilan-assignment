@@ -59,6 +59,8 @@ public class LeaveRequestsController {
             return ResponseEntity.status(404).body(e.getMessage());
         } catch (BadRequestException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (ConflictException e) {
+            return ResponseEntity.status(409).body(e.getMessage());
         }
     }
 
