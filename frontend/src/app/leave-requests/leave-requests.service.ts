@@ -1,14 +1,13 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 import { CreateLeaveRequestPayload, Employee, LeaveRequest } from '../models/leave-request.model';
 
-// TODO: base URL should come from src/environments/environment.ts (Angular's native
-// build-time config mechanism) instead of being hardcoded here - deferred, see DECISIONS.md.
 @Injectable({ providedIn: 'root' })
 export class LeaveRequestsService {
-  private apiUrl = 'http://localhost:5080/api/leave-requests';
-  private employeesApiUrl = 'http://localhost:5080/api/employees';
+  private apiUrl = `${environment.apiUrl}/api/leave-requests`;
+  private employeesApiUrl = `${environment.apiUrl}/api/employees`;
 
   constructor(private http: HttpClient) {}
 
