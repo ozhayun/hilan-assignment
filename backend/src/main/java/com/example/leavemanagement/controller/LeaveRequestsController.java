@@ -10,6 +10,7 @@ import com.example.leavemanagement.repository.LeaveRequestRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.temporal.ChronoUnit;
@@ -88,6 +89,46 @@ public class LeaveRequestsController {
         request.setDays(days);
         request.setStatus(LeaveStatus.PENDING);
 
+        leaveRequestRepository.save(request);
+
+        return ResponseEntity.ok(request);
+    }
+
+    // POST /api/leave-requests/{id}/approve
+    @PostMapping("/{id}/approve")
+    @Transactional
+    public ResponseEntity<?> approve(@PathVariable Long id) {
+        // Lock the request row first, so two concurrent approve() calls for the *same*
+        // request id are serialized instead of both seeing it as still PENDING.
+        LeaveRequest request = leaveRequestRepository.findByIdForUpdate(id).orElse(null);
+        if (request == null) {
+            return ResponseEntity.status(404).body("Leave request not found");
+        }
+        if (request.getStatus() != LeaveStatus.PENDING) {
+            return ResponseEntity.status(409).body("Leave request is already " + request.getStatus());
+        }
+
+        if (request.getType() == LeaveType.VACATION) {
+            // Also lock the employee row, so two concurrent approvals for *different*
+            // requests belonging to the same employee can't both read the same "days
+            // used so far" and jointly push the employee over quota.
+            Employee employee = employeeRepository.findByIdForUpdate(request.getEmployeeId()).orElse(null);
+            if (employee == null) {
+                return ResponseEntity.status(404).body("Employee not found");
+            }
+
+            int used = leaveRequestRepository
+                    .findByEmployeeIdAndTypeAndStatus(request.getEmployeeId(), LeaveType.VACATION, LeaveStatus.APPROVED)
+                    .stream()
+                    .mapToInt(LeaveRequest::getDays)
+                    .sum();
+
+            if (used + request.getDays() > employee.getAnnualQuota()) {
+                return ResponseEntity.status(409).body("Approving this request would exceed the annual quota");
+            }
+        }
+
+        request.setStatus(LeaveStatus.APPROVED);
         leaveRequestRepository.save(request);
 
         return ResponseEntity.ok(request);
