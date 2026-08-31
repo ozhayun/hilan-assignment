@@ -19,6 +19,13 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -103,5 +110,114 @@ class LeaveRequestsTests {
         // Assert
         assertEquals(400, result.getStatusCode().value());
         assertEquals(before, leaveRequests.count());
+    }
+
+    @Test
+    void approve_UnknownId_Returns404() {
+        ResponseEntity<?> result = controller.approve(-1L);
+
+        assertEquals(404, result.getStatusCode().value());
+    }
+
+    @Test
+    void approve_AlreadyApproved_Returns409() {
+        Employee emp = new Employee();
+        emp.setName("Test Emp");
+        emp.setAnnualQuota(20);
+        employees.save(emp);
+
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployeeId(emp.getId());
+        request.setType(LeaveType.VACATION);
+        request.setStatus(LeaveStatus.APPROVED);
+        request.setStartDate(LocalDate.of(2026, 3, 1));
+        request.setEndDate(LocalDate.of(2026, 3, 3));
+        request.setDays(3);
+        leaveRequests.save(request);
+
+        ResponseEntity<?> result = controller.approve(request.getId());
+
+        assertEquals(409, result.getStatusCode().value());
+    }
+
+    @Test
+    void approve_Pending_SetsStatusApproved() {
+        Employee emp = new Employee();
+        emp.setName("Test Emp");
+        emp.setAnnualQuota(20);
+        employees.save(emp);
+
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployeeId(emp.getId());
+        request.setType(LeaveType.VACATION);
+        request.setStatus(LeaveStatus.PENDING);
+        request.setStartDate(LocalDate.of(2026, 3, 1));
+        request.setEndDate(LocalDate.of(2026, 3, 3));
+        request.setDays(3);
+        leaveRequests.save(request);
+
+        ResponseEntity<?> result = controller.approve(request.getId());
+
+        assertTrue(result.getStatusCode().is2xxSuccessful());
+        assertEquals(LeaveStatus.APPROVED, leaveRequests.findById(request.getId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void approve_ConcurrentApprovalsExceedingQuota_OnlyOneSucceeds() throws Exception {
+        // Employee with a 10-day quota and two independent 6-day PENDING requests.
+        // Approving both would total 12 days, over quota - only one may be approved.
+        Employee emp = new Employee();
+        emp.setName("Test Emp");
+        emp.setAnnualQuota(10);
+        employees.save(emp);
+
+        LeaveRequest requestA = new LeaveRequest();
+        requestA.setEmployeeId(emp.getId());
+        requestA.setType(LeaveType.VACATION);
+        requestA.setStatus(LeaveStatus.PENDING);
+        requestA.setStartDate(LocalDate.of(2026, 3, 1));
+        requestA.setEndDate(LocalDate.of(2026, 3, 6));
+        requestA.setDays(6);
+        leaveRequests.save(requestA);
+
+        LeaveRequest requestB = new LeaveRequest();
+        requestB.setEmployeeId(emp.getId());
+        requestB.setType(LeaveType.VACATION);
+        requestB.setStatus(LeaveStatus.PENDING);
+        requestB.setStartDate(LocalDate.of(2026, 4, 1));
+        requestB.setEndDate(LocalDate.of(2026, 4, 6));
+        requestB.setDays(6);
+        leaveRequests.save(requestB);
+
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Callable<ResponseEntity<?>> approveA = () -> {
+                barrier.await();
+                return controller.approve(requestA.getId());
+            };
+            Callable<ResponseEntity<?>> approveB = () -> {
+                barrier.await();
+                return controller.approve(requestB.getId());
+            };
+
+            Future<ResponseEntity<?>> futureA = pool.submit(approveA);
+            Future<ResponseEntity<?>> futureB = pool.submit(approveB);
+
+            ResponseEntity<?> resultA = futureA.get(10, TimeUnit.SECONDS);
+            ResponseEntity<?> resultB = futureB.get(10, TimeUnit.SECONDS);
+
+            boolean exactlyOneSucceeded =
+                    resultA.getStatusCode().is2xxSuccessful() != resultB.getStatusCode().is2xxSuccessful();
+            assertTrue(exactlyOneSucceeded, "Exactly one of the two concurrent approvals should succeed");
+
+            List<LeaveRequest> approved = leaveRequests
+                    .findByEmployeeIdAndTypeAndStatus(emp.getId(), LeaveType.VACATION, LeaveStatus.APPROVED);
+            int totalApprovedDays = approved.stream().mapToInt(LeaveRequest::getDays).sum();
+            assertTrue(totalApprovedDays <= emp.getAnnualQuota(),
+                    "Total approved days must never exceed the annual quota");
+        } finally {
+            pool.shutdownNow();
+        }
     }
 }
