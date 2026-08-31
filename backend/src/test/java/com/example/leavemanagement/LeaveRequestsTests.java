@@ -3,6 +3,8 @@ package com.example.leavemanagement;
 import com.example.leavemanagement.controller.LeaveRequestsController;
 import com.example.leavemanagement.dto.CreateLeaveRequestDto;
 import com.example.leavemanagement.model.Employee;
+import com.example.leavemanagement.model.LeaveRequest;
+import com.example.leavemanagement.model.LeaveStatus;
 import com.example.leavemanagement.model.LeaveType;
 import com.example.leavemanagement.repository.EmployeeRepository;
 import com.example.leavemanagement.repository.LeaveRequestRepository;
@@ -69,7 +71,37 @@ class LeaveRequestsTests {
         assertEquals(before + 1, leaveRequests.count());
     }
 
-    // TODO (candidate): add a test that proves the balance bug is fixed —
-    // an employee who has already used most of the quota should NOT be able
-    // to create a request that pushes them over the annual quota.
+    @Test
+    void create_ExceedingRemainingQuota_IsRejected() {
+        // Arrange: employee with a 20-day quota who already has 18 approved vacation days.
+        Employee emp = new Employee();
+        emp.setName("Test Emp");
+        emp.setAnnualQuota(20);
+        employees.save(emp);
+
+        LeaveRequest alreadyApproved = new LeaveRequest();
+        alreadyApproved.setEmployeeId(emp.getId());
+        alreadyApproved.setType(LeaveType.VACATION);
+        alreadyApproved.setStatus(LeaveStatus.APPROVED);
+        alreadyApproved.setStartDate(LocalDate.of(2026, 1, 1));
+        alreadyApproved.setEndDate(LocalDate.of(2026, 1, 18));
+        alreadyApproved.setDays(18);
+        leaveRequests.save(alreadyApproved);
+
+        long before = leaveRequests.count();
+
+        // A further 5-day request would push the employee to 23 days, over the 20-day quota.
+        CreateLeaveRequestDto dto = new CreateLeaveRequestDto();
+        dto.setEmployeeId(emp.getId());
+        dto.setType(LeaveType.VACATION);
+        dto.setStartDate(LocalDate.of(2026, 3, 1));
+        dto.setEndDate(LocalDate.of(2026, 3, 5));
+
+        // Act
+        ResponseEntity<?> result = controller.create(dto);
+
+        // Assert
+        assertEquals(400, result.getStatusCode().value());
+        assertEquals(before, leaveRequests.count());
+    }
 }
