@@ -1,4 +1,5 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, DestroyRef, inject, OnInit } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Employee, LeaveRequest, LeaveStatus, LeaveType } from '../models/leave-request.model';
@@ -27,6 +28,7 @@ export class LeaveRequestsComponent implements OnInit {
 
   private fb = inject(FormBuilder);
   private leaveRequestsService = inject(LeaveRequestsService);
+  private destroyRef = inject(DestroyRef);
 
   form = this.fb.group(
     {
@@ -45,16 +47,22 @@ export class LeaveRequestsComponent implements OnInit {
 
   load(): void {
     this.loading = true;
-    this.leaveRequestsService.getAll().subscribe((data) => {
-      this.requests = data;
-      this.loading = false;
-    });
+    this.leaveRequestsService
+      .getAll()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data) => {
+        this.requests = data;
+        this.loading = false;
+      });
   }
 
   loadEmployees(): void {
-    this.leaveRequestsService.getEmployees().subscribe((data) => {
-      this.employees = data;
-    });
+    this.leaveRequestsService
+      .getEmployees()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data) => {
+        this.employees = data;
+      });
   }
 
   submit(): void {
@@ -75,6 +83,7 @@ export class LeaveRequestsComponent implements OnInit {
         startDate: startDate!,
         endDate: endDate!
       })
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.submitting = false;
@@ -96,18 +105,21 @@ export class LeaveRequestsComponent implements OnInit {
     this.approvingIds.add(request.id);
     delete this.approveErrors[request.id];
 
-    this.leaveRequestsService.approve(request.id).subscribe({
-      next: (updated) => {
-        this.approvingIds.delete(request.id);
-        // Patch just this row instead of reloading/refetching the whole list.
-        request.status = updated.status;
-      },
-      error: (err) => {
-        this.approvingIds.delete(request.id);
-        this.approveErrors[request.id] =
-          typeof err.error === 'string' ? err.error : 'Failed to approve request.';
-      }
-    });
+    this.leaveRequestsService
+      .approve(request.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (updated) => {
+          this.approvingIds.delete(request.id);
+          // Patch just this row instead of reloading/refetching the whole list.
+          request.status = updated.status;
+        },
+        error: (err) => {
+          this.approvingIds.delete(request.id);
+          this.approveErrors[request.id] =
+            typeof err.error === 'string' ? err.error : 'Failed to approve request.';
+        }
+      });
   }
 
   typeLabel(type: LeaveType): string {
