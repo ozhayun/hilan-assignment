@@ -86,12 +86,28 @@ export class LeaveRequestsComponent implements OnInit {
     });
   }
 
-  // Wired up by the candidate as part of the assignment.
-  approve(id: number): void {
-    // TODO (candidate): call POST /api/leave-requests/{id}/approve
-    // and handle loading / error / success without a generic alert.
-    this.http.post<any>(this.apiUrl + '/' + id + '/approve', {}).subscribe(() => {
-      this.load();
+  approvingIds = new Set<number>();
+  approveErrors: Record<number, string> = {};
+
+  isApproving(id: number): boolean {
+    return this.approvingIds.has(id);
+  }
+
+  approve(request: any): void {
+    this.approvingIds.add(request.id);
+    delete this.approveErrors[request.id];
+
+    this.http.post<any>(this.apiUrl + '/' + request.id + '/approve', {}).subscribe({
+      next: (updated) => {
+        this.approvingIds.delete(request.id);
+        // Patch just this row instead of reloading/refetching the whole list.
+        request.status = updated.status;
+      },
+      error: (err) => {
+        this.approvingIds.delete(request.id);
+        this.approveErrors[request.id] =
+          typeof err.error === 'string' ? err.error : 'Failed to approve request.';
+      }
     });
   }
 
