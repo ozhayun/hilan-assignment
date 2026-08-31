@@ -16,3 +16,6 @@ frontend/.angular/
 # OS
 Thumbs.db
 .DS_Store
+
+# Scratch/working notes (local only, not part of the submission)
+docs/
