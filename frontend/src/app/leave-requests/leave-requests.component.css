@@ -9,3 +9,22 @@ button {
 button:hover {
   background: #186faf;
 }
+
+.new-request-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+  margin-bottom: 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.error {
+  color: #d32f2f;
+  font-size: 0.85em;
+}

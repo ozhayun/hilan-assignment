@@ -19,3 +19,4 @@ Thumbs.db
 
 # Scratch/working notes (local only, not part of the submission)
 docs/
+.playwright-mcp/

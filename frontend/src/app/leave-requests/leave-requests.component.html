@@ -1,6 +1,56 @@
 <h2>Leave Requests</h2>
 
-<!-- TODO (candidate): add the "new request" form here, with validation. -->
+<form [formGroup]="form" (ngSubmit)="submit()" class="new-request-form">
+  <h3>New Leave Request</h3>
+
+  <div class="field">
+    <label for="employeeId">Employee</label>
+    <select id="employeeId" formControlName="employeeId">
+      <option [ngValue]="null">Select employee</option>
+      <option *ngFor="let e of employees" [ngValue]="e.id">{{ e.name }}</option>
+    </select>
+    <div class="error" *ngIf="form.get('employeeId')?.invalid && form.get('employeeId')?.touched">
+      Employee is required.
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="leaveType">Leave type</label>
+    <select id="leaveType" formControlName="leaveType">
+      <option [ngValue]="null">Select type</option>
+      <option [ngValue]="0">Vacation</option>
+      <option [ngValue]="1">Sick</option>
+      <option [ngValue]="2">Unpaid</option>
+    </select>
+    <div class="error" *ngIf="form.get('leaveType')?.invalid && form.get('leaveType')?.touched">
+      Leave type is required.
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="startDate">Start date</label>
+    <input id="startDate" type="date" formControlName="startDate" />
+    <div class="error" *ngIf="form.get('startDate')?.invalid && form.get('startDate')?.touched">
+      Start date is required.
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="endDate">End date</label>
+    <input id="endDate" type="date" formControlName="endDate" />
+    <div class="error" *ngIf="form.get('endDate')?.invalid && form.get('endDate')?.touched">
+      End date is required.
+    </div>
+  </div>
+
+  <div class="error" *ngIf="form.errors?.['dateRangeInvalid'] && form.get('endDate')?.touched">
+    Start date must not be after end date.
+  </div>
+
+  <div class="error" *ngIf="submitError">{{ submitError }}</div>
+
+  <button type="submit" [disabled]="submitting">{{ submitting ? 'Submitting...' : 'Submit request' }}</button>
+</form>
 
 <div *ngIf="loading">Loading...</div>
 
