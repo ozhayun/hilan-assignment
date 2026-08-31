@@ -23,7 +23,6 @@
 - **ניקוי RxJS** (`takeUntilDestroyed`) ב‑4 מקומות ה‑`subscribe()` בקומפוננטה — לא בוצע. עם עוד יום הייתי מוסיף את זה בכל מקום, כולל בדיקה חוזרת שה‑optimistic update של `approve()` (עדכון ישיר של שורה ב‑array) עדיין עובד נכון תחתיו.
 - **`environment.ts`**: כתובת ה‑API עדיין hardcoded בקוד (ב‑`LeaveRequestsService`) במקום דרך `src/environments/environment.ts` + `fileReplacements` ב‑`angular.json` (המנגנון הטבעי של Angular לזה — לא `.env`, כי ה‑build system של Angular 17 לא קורא `.env` בלי תלות חיצונית נוספת). עם עוד יום הייתי מעביר את זה.
 - **בדיקת "אין תאריך עבר"**: הטופס מאפשר להגיש בקשה לתאריכים שכבר עברו. החלטתי שזה לא בהכרח באג — מערכות HR אמיתיות מאפשרות לעיתים קרובות דיווח למפרע (חופשת מחלה שמדווחים עליה אחרי החזרה, תיקון רישום שפוספס), וה‑README לא ביקש חוק כזה. עם עוד יום הייתי בודק עם בעל המוצר לפני שמחליט.
-- **בונוס אבטחה** (`GET /api/leave-requests/search`) — ראו סעיף 5.
 - **עיצוב UI**: השארתי CSS מינימלי, בלי modals/הרחבות — ה‑README מבקש במפורש לראות שיקול דעת בסדרי עדיפויות ולא מוצר מלוטש, וה‑over‑design כאן היה scope creep ביחס למשימות שבאמת נבדקות.
 
 ## 5. שימוש ב‑AI
@@ -36,9 +35,9 @@
 - ב‑prompt מס' 2 (שכבת Service), הבקשה ביקשה `@ResponseStatus` על החריגות "כדי שה‑Controller לא יצטרך לבנות `ResponseEntity` ידנית" — אבל זה **שבר בפועל 4 מתוך 6 הטסטים הקיימים**. הסיבה: `@ResponseStatus` פועל רק כש‑Spring MVC בעצמו תופס את החריגה (דרך dispatch אמיתי של HTTP), אבל הטסטים בפרויקט קוראים ל‑`controller.create()`/`controller.approve()` **ישירות כקריאת Java רגילה**, בלי שכבת ה‑servlet בכלל — אז החריגות פשוט "עפו" דרך הטסט בלי להיתרגם לקוד סטטוס. גיליתי את זה רק כשהרצתי `mvn test` בפועל, לא מקריאת ה‑prompt. תיקנתי: חזרתי ל‑`try/catch` מפורש ב‑Controller (כמו לפני הרפקטור), והסרתי את `@ResponseStatus` מהחריגות כי הוא היה קוד מת שרק מטעה קורא עתידי לחשוב שהוא עושה את המיפוי.
 
 ### אבטחה
-- **מה מצאתי**: SQL Injection ב‑`GET /api/leave-requests/search` (`backend/src/main/java/com/example/leavemanagement/controller/LeaveRequestsController.java`, מתודת `search`) — הפרמטר `name` מוכנס ישירות כ‑string concatenation לתוך שאילתת SQL native (`"... WHERE name LIKE '%" + name + "%'"`).
-- **הסיכון**: תוקף יכול לשלוח ב‑`name` קטע SQL (למשל `' UNION SELECT ...--`) ולשנות את השאילתה בפועל — לחלץ נתונים שלא אמורים להיות נגישים, לעקוף את הסינון המיועד, או במקרים חמורים יותר לתמרן/לחשוף מידע ממסד הנתונים כולו.
-- **תיקון**: לא בוצע בגלל הזמן — נשאר כ‑endpoint ידוע כפגיע. התיקון הנכון: החלפת ה‑string concatenation בשאילתת JPQL/פרמטרית (`@Query` עם `:name` bind parameter, או `Repository` method כמו `findByEmployee_NameContaining`), בדיוק כמו שאר השאילתות בקוד.
+- **מה מצאתי**: SQL Injection ב‑`GET /api/leave-requests/search` (`backend/src/main/java/com/example/leavemanagement/controller/LeaveRequestsController.java`, מתודת `search`) — הפרמטר `name` הוכנס ישירות כ‑string concatenation לתוך שאילתת SQL native (`"... WHERE name LIKE '%" + name + "%'"`).
+- **הסיכון**: תוקף יכול לשלוח ב‑`name` קטע SQL (למשל `' OR '1'='1`) ולשנות את השאילתה בפועל — לחלץ נתונים שלא אמורים להיות נגישים, לעקוף את הסינון המיועד, או במקרים חמורים יותר לתמרן/לחשוף מידע ממסד הנתונים כולו.
+- **תיקון**: **בוצע** — הוחלף ב‑`LeaveRequestRepository.findByEmployee_NameContainingIgnoreCase(String name)`, שאילתת Spring Data עם bind parameter אמיתי, בלי string concatenation. אפשר גם להסיר לגמרי את התלות הישירה של ה‑Controller ב‑`EntityManager`. נוספו שני טסטים: חיפוש רגיל עדיין עובד, ותשלובת injection קלאסית (`' OR '1'='1`) מטופלת כטקסט מילולי ומחזירה רשימה ריקה במקום לשנות את השאילתה — אומת גם ידנית מול ה‑API החי.
 
 ## 6. הוראות הרצה
 - אין שינוי מהוראות ה‑README המקורי — `docker compose up --build` מרים DB+API יחד כמתואר.
