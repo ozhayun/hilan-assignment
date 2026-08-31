@@ -42,6 +42,14 @@ public class LeaveRequestService {
 
         int days = (int) ChronoUnit.DAYS.between(dto.getStartDate(), dto.getEndDate()) + 1;
 
+        // Reject double-booking: this employee can't have two leave requests
+        // (of any type) covering the same day.
+        List<LeaveRequest> overlapping = leaveRequestRepository.findOverlapping(
+                dto.getEmployeeId(), dto.getStartDate(), dto.getEndDate(), LeaveStatus.REJECTED);
+        if (!overlapping.isEmpty()) {
+            throw new ConflictException("Overlaps with an existing leave request for this employee");
+        }
+
         // How many vacation days has the employee already used this year?
         int used = vacationDaysUsed(dto.getEmployeeId());
 
