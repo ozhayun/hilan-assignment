@@ -40,6 +40,14 @@ public class LeaveRequestService {
         Employee employee = employeeRepository.findById(dto.getEmployeeId())
                 .orElseThrow(() -> new NotFoundException("Employee not found"));
 
+        // The frontend enforces start <= end, but the API itself must too - otherwise
+        // a caller that bypasses the UI (curl, Swagger) can submit a reversed range and
+        // get a negative "days" value, which then corrupts the quota running total for
+        // every future request (see DECISIONS.md).
+        if (dto.getEndDate().isBefore(dto.getStartDate())) {
+            throw new BadRequestException("End date must not be before start date");
+        }
+
         int days = (int) ChronoUnit.DAYS.between(dto.getStartDate(), dto.getEndDate()) + 1;
 
         // Reject double-booking: this employee can't have two leave requests

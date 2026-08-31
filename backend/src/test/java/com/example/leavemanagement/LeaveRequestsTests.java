@@ -113,6 +113,45 @@ class LeaveRequestsTests {
     }
 
     @Test
+    void create_ReversedDateRange_IsRejectedAndCannotCorruptQuota() {
+        // Arrange: employee with a 20-day quota and 18 already-approved vacation days -
+        // the same fixture used to prove the original quota bug fix.
+        Employee emp = new Employee();
+        emp.setName("Test Emp");
+        emp.setAnnualQuota(20);
+        employees.save(emp);
+
+        LeaveRequest alreadyApproved = new LeaveRequest();
+        alreadyApproved.setEmployeeId(emp.getId());
+        alreadyApproved.setType(LeaveType.VACATION);
+        alreadyApproved.setStatus(LeaveStatus.APPROVED);
+        alreadyApproved.setStartDate(LocalDate.of(2026, 1, 1));
+        alreadyApproved.setEndDate(LocalDate.of(2026, 1, 18));
+        alreadyApproved.setDays(18);
+        leaveRequests.save(alreadyApproved);
+
+        long before = leaveRequests.count();
+
+        // Reversed range: endDate before startDate. Without server-side validation this
+        // computes a negative "days" value, which would then reduce the running approved
+        // total for future quota checks - a real exploit found by hitting the API
+        // directly (bypassing the frontend's own start<=end validator). Must be rejected
+        // with 400 before any row is persisted.
+        CreateLeaveRequestDto dto = new CreateLeaveRequestDto();
+        dto.setEmployeeId(emp.getId());
+        dto.setType(LeaveType.VACATION);
+        dto.setStartDate(LocalDate.of(2026, 11, 10));
+        dto.setEndDate(LocalDate.of(2026, 11, 1));
+
+        // Act
+        ResponseEntity<?> result = controller.create(dto);
+
+        // Assert: rejected, nothing persisted, so the quota total can't be corrupted.
+        assertEquals(400, result.getStatusCode().value());
+        assertEquals(before, leaveRequests.count());
+    }
+
+    @Test
     void create_OverlappingExistingRequest_IsRejected() {
         // Arrange: employee with an existing approved request 10-20 Mar.
         Employee emp = new Employee();
