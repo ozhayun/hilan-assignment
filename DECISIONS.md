@@ -7,7 +7,7 @@
   - **במכוון בלי over‑engineering**: מחלקת Service קונקרטית אחת, בלי interface (`ILeaveRequestService`)/`Impl`, בלי base class גנרי. יישום אחד לכל aggregate מספיק בגודל הזה.
 - **טיפול בשגיאות דרך חריגות** (`NotFoundException`/`BadRequestException`/`ConflictException`) שנתפסות מפורשות ב‑Controller — לא דרך `@Spring ResponseStatus` על המחלקות עצמן. הסיבה: הטסטים הקיימים קוראים למתודות ה‑Controller ישירות (לא דרך dispatch אמיתי של Spring MVC), אז `@ResponseStatus` פשוט לא היה מופעל שם. גיליתי את זה כי הרצתי `mvn test` בפועל ולא רק קראתי קוד — פירוט מלא בסעיף 5.
 - **Concurrency דרך נעילות DB אמיתיות** (`SELECT ... FOR UPDATE` דרך `@Lock(PESSIMISTIC_WRITE)`), לא לוגיקה באפליקציה — כי זה בדיוק המקרה שה‑DB אמור לפתור, ופשוט יותר מנעילה מבוזרת.
-- **Frontend**: Reactive Forms עם validator מותאם ל‑cross‑field (start≤end), ו‑Service ייעודי ל‑HTTP במקום קריאות ישירות מה‑Component.
+- **Frontend**: Reactive Forms עם validator מותאם ל‑cross‑field (start≤end), ו‑Service ייעודי ל‑HTTP במקום קריאות ישירות מה‑Component. כתובת ה‑API דרך `src/environments/environment.ts` (+ `fileReplacements` ב‑`angular.json`), ו‑`takeUntilDestroyed` בכל 4 מקומות ה‑`subscribe()` בקומפוננטה — בלי unsubscribe ידני שנשכח.
 
 ## 2. הבאג ביתרת החופשה
 - **מה היה הבאג**: ב‑`LeaveRequestsController.create()` (כיום `LeaveRequestService.create()`) חושב משתנה `used` (ימי חופשה שכבר אושרו), אבל הוא **לא היה בשימוש בפועל** בבדיקה — הבדיקה הייתה `days > employee.getAnnualQuota()` במקום `used + days > employee.getAnnualQuota()`. כתוצאה מזה, עובד עם 18 ימים מאושרים מתוך מכסה 20 יכול היה להגיש עוד בקשה של עד 20 ימים בלי שהמערכת תדחה אותה.
@@ -20,10 +20,9 @@
 - **תקלה נוספת שמצאתי בבדיקה ידנית** (לא ב‑code review): שתי בקשות חופשה של אותו עובד יכלו לחפוף בתאריכים (למשל 31/08–02/09 ו‑01/09–05/09) בלי שהמערכת תמנע זאת — היא בדקה רק סה"כ ימים, לא התנגשות בתאריכים בפועל. תוקן: שאילתה שמוצאת בקשות לא‑דחויות של אותו עובד שחופפות בטווח, נבדקת ב‑`create()` ומחזירה 409.
 
 ## 4. על מה ויתרתי בגלל הזמן
-- **ניקוי RxJS** (`takeUntilDestroyed`) ב‑4 מקומות ה‑`subscribe()` בקומפוננטה — לא בוצע. עם עוד יום הייתי מוסיף את זה בכל מקום, כולל בדיקה חוזרת שה‑optimistic update של `approve()` (עדכון ישיר של שורה ב‑array) עדיין עובד נכון תחתיו.
-- **`environment.ts`**: כתובת ה‑API עדיין hardcoded בקוד (ב‑`LeaveRequestsService`) במקום דרך `src/environments/environment.ts` + `fileReplacements` ב‑`angular.json` (המנגנון הטבעי של Angular לזה — לא `.env`, כי ה‑build system של Angular 17 לא קורא `.env` בלי תלות חיצונית נוספת). עם עוד יום הייתי מעביר את זה.
 - **בדיקת "אין תאריך עבר"**: הטופס מאפשר להגיש בקשה לתאריכים שכבר עברו. החלטתי שזה לא בהכרח באג — מערכות HR אמיתיות מאפשרות לעיתים קרובות דיווח למפרע (חופשת מחלה שמדווחים עליה אחרי החזרה, תיקון רישום שפוספס), וה‑README לא ביקש חוק כזה. עם עוד יום הייתי בודק עם בעל המוצר לפני שמחליט.
 - **עיצוב UI**: השארתי CSS מינימלי, בלי modals/הרחבות — ה‑README מבקש במפורש לראות שיקול דעת בסדרי עדיפויות ולא מוצר מלוטש, וה‑over‑design כאן היה scope creep ביחס למשימות שבאמת נבדקות.
+- (בהתחלה גם ניקוי RxJS ו‑`environment.ts` היו ברשימת הוויתורים בגלל זמן — בסוף היה זמן להשלים אותם, ראו סעיף 1.)
 
 ## 5. שימוש ב‑AI
 ### איפה AI עזר (כולל prompts)
