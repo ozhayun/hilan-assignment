@@ -254,4 +254,68 @@ class LeaveRequestsTests {
             pool.shutdownNow();
         }
     }
+
+    @Test
+    void search_ByNamePartialMatch_ReturnsOnlyMatchingEmployeeRequests() {
+        // Names deliberately don't overlap with DataSeeder's "Dana Levi"/"Yossi Cohen"
+        // (this @SpringBootTest boots the full context, so the seeder runs too) -
+        // otherwise a substring search for "dana" would also match the seeded employee.
+        Employee zephyrine = new Employee();
+        zephyrine.setName("Zephyrine Query");
+        zephyrine.setAnnualQuota(20);
+        employees.save(zephyrine);
+
+        Employee other = new Employee();
+        other.setName("Unrelated Person");
+        other.setAnnualQuota(14);
+        employees.save(other);
+
+        LeaveRequest zephyrineRequest = new LeaveRequest();
+        zephyrineRequest.setEmployeeId(zephyrine.getId());
+        zephyrineRequest.setType(LeaveType.VACATION);
+        zephyrineRequest.setStatus(LeaveStatus.APPROVED);
+        zephyrineRequest.setStartDate(LocalDate.of(2026, 5, 1));
+        zephyrineRequest.setEndDate(LocalDate.of(2026, 5, 2));
+        zephyrineRequest.setDays(2);
+        leaveRequests.save(zephyrineRequest);
+
+        LeaveRequest otherRequest = new LeaveRequest();
+        otherRequest.setEmployeeId(other.getId());
+        otherRequest.setType(LeaveType.VACATION);
+        otherRequest.setStatus(LeaveStatus.APPROVED);
+        otherRequest.setStartDate(LocalDate.of(2026, 5, 3));
+        otherRequest.setEndDate(LocalDate.of(2026, 5, 4));
+        otherRequest.setDays(2);
+        leaveRequests.save(otherRequest);
+
+        List<LeaveRequest> results = leaveRequests.findByEmployee_NameContainingIgnoreCase("zephyrine");
+
+        assertEquals(1, results.size());
+        assertEquals(zephyrine.getId(), results.get(0).getEmployeeId());
+    }
+
+    @Test
+    void search_WithSqlInjectionPayload_TreatsItAsLiteralTextNotSql() {
+        Employee emp = new Employee();
+        emp.setName("Test Emp");
+        emp.setAnnualQuota(20);
+        employees.save(emp);
+
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployeeId(emp.getId());
+        request.setType(LeaveType.VACATION);
+        request.setStatus(LeaveStatus.APPROVED);
+        request.setStartDate(LocalDate.of(2026, 5, 1));
+        request.setEndDate(LocalDate.of(2026, 5, 2));
+        request.setDays(2);
+        leaveRequests.save(request);
+
+        // With the old string-concatenated native query, a payload like this could
+        // alter the query itself (e.g. "') OR '1'='1" style tautologies) and leak
+        // unrelated rows. With a bind parameter it must be treated as literal text
+        // that simply matches nothing, and must not throw.
+        List<LeaveRequest> results = leaveRequests.findByEmployee_NameContainingIgnoreCase("' OR '1'='1");
+
+        assertTrue(results.isEmpty());
+    }
 }

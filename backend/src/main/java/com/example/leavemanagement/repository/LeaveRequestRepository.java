@@ -31,4 +31,8 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                         @Param("startDate") LocalDate startDate,
                                         @Param("endDate") LocalDate endDate,
                                         @Param("excludedStatus") LeaveStatus excludedStatus);
+
+    // Case-insensitive substring match on the employee's name, via a proper bind
+    // parameter - no string concatenation into SQL.
+    List<LeaveRequest> findByEmployee_NameContainingIgnoreCase(String name);
 }
